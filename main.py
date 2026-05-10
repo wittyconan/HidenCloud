@@ -58,6 +58,7 @@ def send_tg_notification(message, photo_path=None):
 
 def take_screenshot(driver, name):
     """截图并返回文件路径"""
+    os.makedirs(SCREENSHOT_DIR, exist_ok=True)
     timestamp = datetime.now().strftime('%H%M%S')
     filename = f"{SCREENSHOT_DIR}/{timestamp}-{name}.png"
     try:
@@ -65,6 +66,7 @@ def take_screenshot(driver, name):
         print(f"[INFO] 📸 截图 → {filename}")
     except Exception as e:
         print(f"[WARN] 截图失败: {e}")
+        filename = None
     return filename
 
 
@@ -137,15 +139,48 @@ def parse_due_date(text):
 
 def get_current_due_date(driver):
     """获取当前管理页面的到期时间，返回原始字符串和标准化日期"""
+    due_selectors = [
+        ("xpath", "//h6[contains(text(),'Due date')]/following-sibling::div"),
+        ("xpath", "//h6[contains(text(),'Due Date')]/following-sibling::div"),
+        ("xpath", "//*[contains(text(),'Due date')]/following-sibling::*"),
+        ("xpath", "//*[contains(text(),'Expire')]/following-sibling::*"),
+        ("xpath", "//*[contains(text(),'Expiry')]/following-sibling::*"),
+        ("xpath", "//span[contains(@class,'due-date') or contains(@class,'expire')]"),
+        ("xpath", "//div[contains(@class,'card-body')]//div[not(contains(@class,'card-header'))]"),
+    ]
+    
+    for by, selector in due_selectors:
+        try:
+            due_elem = driver.find_element(by, selector)
+            if due_elem and due_elem.text.strip():
+                raw = due_elem.text.strip()
+                print(f"[DEBUG] 找到到期日期元素: {raw[:50]}")
+                std = parse_due_date(raw)
+                return raw, std
+        except Exception as e:
+            print(f"[DEBUG] 选择器失败 {selector}: {str(e)[:50]}")
+            continue
+    
+    # 如果找不到元素，尝试从页面文本中直接提取日期
     try:
-        due_elem = driver.find_element(
-            "xpath", "//h6[contains(text(),'Due date')]/following-sibling::div"
-        )
-        raw = due_elem.text.strip()
-        std = parse_due_date(raw)
-        return raw, std
+        page_text = driver.find_element("tag name", "body").text
+        date_patterns = [
+            r'(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})',  # 28 Apr 2026
+            r'(\d{4})-(\d{2})-(\d{2})',               # 2026-04-28
+            r'(\d{2})/(\d{2})/(\d{4})',               # 04/28/2026
+        ]
+        for pattern in date_patterns:
+            match = re.search(pattern, page_text)
+            if match:
+                raw = match.group(0)
+                std = parse_due_date(raw)
+                print(f"[DEBUG] 从页面文本提取日期: {raw}")
+                return raw, std
     except:
-        return "N/A", None
+        pass
+    
+    print("[WARN] 无法找到到期日期元素")
+    return "N/A", None
 
 
 # ====================== 主逻辑 ======================
