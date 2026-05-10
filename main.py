@@ -200,7 +200,6 @@ def main():
         "window_size": "1920,1080",
         "agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.7727.117 Safari/537.36",
         "disable_csp": True,
-        "enable_wifi": True,
     }
     
     if PROXY_SERVER:
