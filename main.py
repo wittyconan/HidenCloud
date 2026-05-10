@@ -196,10 +196,8 @@ def main():
     # ---------- 浏览器驱动配置 ----------
     driver_kwargs = {
         "headless": True,
-        "headless2": True,
+        "uc": True,  # 使用 undetected-chromedriver 更好绕过 Cloudflare
         "window_size": "1920,1080",
-        "agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.7727.117 Safari/537.36",
-        "disable_csp": True,
     }
     
     if PROXY_SERVER:
@@ -208,38 +206,41 @@ def main():
     
     driver = Driver(**driver_kwargs)
     
-    # 添加更强的浏览器伪装
+    # 添加浏览器伪装
     driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
     driver.execute_script("Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]})")
     driver.execute_script("Object.defineProperty(navigator, 'languages', {get: () => ['zh-CN', 'zh', 'en-US', 'en']})")
-    driver.execute_script("""
-        window.chrome = {
-            runtime: {},
-            loadTimes: function() { return {
-                requestTime: Date.now() - 10000,
-                startLoadTime: Date.now() - 9000,
-                commitLoadTime: Date.now() - 8000,
-                finishDocumentLoadTime: Date.now() - 1000,
-                finishLoadTime: Date.now()
-            }}
-        }
-    """)
     print("[INFO] 🎭 已应用浏览器伪装")
     
+    # 安全包装 driver.get，绕过 uc=True 的窗口关闭超时
     original_get = driver.get
     
-    def safe_get(url):
-        try:
-            original_get(url)
-        except Exception as e:
-            if "close window" in str(e).lower() or "timeout" in str(e).lower():
-                print(f"[WARN] 窗口关闭超时（可忽略）: {e}")
-            else:
-                raise
+    def safe_get(url, max_retries=3):
+        for attempt in range(max_retries):
+            try:
+                original_get(url)
+                return
+            except Exception as e:
+                error_msg = str(e).lower()
+                if "close window" in error_msg or "failed to close window" in error_msg:
+                    print(f"[WARN] 窗口关闭超时 (尝试 {attempt + 1}/{max_retries})，重试...")
+                    try:
+                        driver.execute_script("try { window.close(); } catch(e) {}")
+                        if driver.window_handles:
+                            driver.switch_to.window(driver.window_handles[0])
+                    except:
+                        pass
+                    time.sleep(2)
+                elif "timeout" in error_msg:
+                    print(f"[WARN] 页面加载超时 (尝试 {attempt + 1}/{max_retries})，重试...")
+                    time.sleep(3)
+                else:
+                    raise
+        print("[WARN] 窗口关闭超时，继续执行...")
     
     driver.get = safe_get
 
-    driver.set_page_load_timeout(60)
+    driver.set_page_load_timeout(90)
     driver.set_script_timeout(60)
 
     try:
