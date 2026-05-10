@@ -7,6 +7,8 @@ import time
 import requests
 from datetime import datetime, timezone, timedelta
 from seleniumbase import Driver
+import signal
+import subprocess
 
 # ====================== 配置区域 ======================
 HIDENCLOUD = os.getenv("HIDENCLOUD", "")
@@ -198,13 +200,29 @@ def main():
         "window_size": "1280,753",
         "disable_csp": True,
         "agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
-        "page_load_strategy": "eager",
     }
+    
     if PROXY_SERVER:
         driver_kwargs["proxy"] = PROXY_SERVER
         print(f"[INFO] 🌐 使用代理: {PROXY_SERVER}")
-
+    
     driver = Driver(**driver_kwargs)
+    
+    original_get = driver.get
+    
+    def safe_get(url):
+        try:
+            original_get(url)
+        except Exception as e:
+            if "close window" in str(e).lower() or "timeout" in str(e).lower():
+                print(f"[WARN] 窗口关闭超时（可忽略）: {e}")
+            else:
+                raise
+    
+    driver.get = safe_get
+
+    driver.set_page_load_timeout(60)
+    driver.set_script_timeout(60)
 
     try:
         driver.get("about:blank")
