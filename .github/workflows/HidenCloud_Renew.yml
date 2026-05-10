@@ -53,6 +53,17 @@ jobs:
           print(f"[DEBUG] PROXY_NODE 长度: {len(url)}")
           print(f"[DEBUG] PROXY_NODE 前50字符: {url[:50]}")
           
+          # 检查是否是 base64 编码
+          if not any(url.startswith(p) for p in ["vless://", "vmess://", "trojan://", "ss://", "socks5://", "socks://"]):
+              print("[INFO] 检测到 base64 编码的链接，正在解码...")
+              try:
+                  decoded = base64.b64decode(url + "==").decode('utf-8')
+                  print(f"[DEBUG] 解码结果前80字符: {decoded[:80]}")
+                  url = decoded
+              except Exception as e:
+                  print(f"[WARN] Base64 解码失败: {e}")
+                  sys.exit(1)
+          
           if url == "***" or url.startswith("***"):
               print("[ERROR] GitHub Actions 未正确传递 secrets，请检查 PROXY_NODE 是否正确配置")
               sys.exit(1)
@@ -85,7 +96,7 @@ jobs:
               sys.exit(0)
           else:
               print(f"[ERROR] 不支持的协议或格式错误")
-              print(f"[DEBUG] URL 可能被截断或格式错误: {url[:50]}")
+              print(f"[DEBUG] URL 可能被截断或格式错误: {url[:80]}")
               sys.exit(1)
           
           print(f"[INFO] 检测到协议: {protocol}")
