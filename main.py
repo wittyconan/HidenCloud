@@ -286,8 +286,23 @@ def main():
         # ---------- 3. 提取服务器 ID ----------
         print("[INFO] 🔍 提取服务器 ID...")
         take_screenshot(driver, "08-dashboard")
-        time.sleep(5)
-
+        
+        print("[INFO] ⏳ 等待页面加载完成...")
+        time.sleep(3)
+        
+        # 等待页面内容加载
+        for attempt in range(3):
+            try:
+                body_text = driver.execute_script("return document.body.innerText || '';")
+                if len(body_text) > 100:
+                    print(f"[DEBUG] 页面内容长度: {len(body_text)} 字符")
+                    break
+                print(f"[WARN] 页面内容过短，尝试 {attempt + 1}/3...")
+                time.sleep(3)
+            except Exception as e:
+                print(f"[WARN] 页面等待失败: {e}")
+                time.sleep(2)
+        
         driver.execute_script("window.scrollTo(0, 0);")
         time.sleep(1)
 
@@ -400,7 +415,19 @@ def main():
         manage_url = f"{BASE_URL}/service/{sid}/manage"
         print(f"[INFO] 🚀 访问管理页面: {BASE_URL}/service/***/manage")
         driver.get(manage_url)
-        time.sleep(3)
+        
+        print("[INFO] ⏳ 等待管理页面加载完成...")
+        for attempt in range(3):
+            time.sleep(2)
+            try:
+                body_text = driver.execute_script("return document.body.innerText || '';")
+                if len(body_text) > 50:
+                    print(f"[DEBUG] 管理页面内容长度: {len(body_text)} 字符")
+                    break
+                print(f"[WARN] 管理页面内容过短，尝试 {attempt + 1}/3...")
+            except Exception as e:
+                print(f"[WARN] 管理页面等待失败: {e}")
+        
         take_screenshot(driver, "09-manage-page")
 
         # ---------- 4. 获取续订前到期时间 ----------
