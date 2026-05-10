@@ -433,13 +433,25 @@ def main():
         else:
             print("[INFO] ✅ 已登录，跳过登录流程")
             take_screenshot(driver, "02-already-logged-in")
+            
+            # 确保 Dashboard 页面完全加载
+            print("[DEBUG] 等待 Dashboard 完全加载...")
+            for load_wait in range(5):
+                time.sleep(2)
+                try:
+                    body_text = driver.execute_script("return document.body.innerText || '';")
+                    print(f"[DEBUG] Dashboard 内容长度: {len(body_text)} 字符")
+                    if len(body_text) > 200:
+                        break
+                except:
+                    continue
 
         # ---------- 3. 提取服务器 ID ----------
         print("[INFO] 🔍 提取服务器 ID...")
         take_screenshot(driver, "08-dashboard")
         
         print("[INFO] ⏳ 等待页面加载完成...")
-        time.sleep(3)
+        time.sleep(5)
         
         # 等待页面内容加载
         for attempt in range(3):
