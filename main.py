@@ -194,13 +194,11 @@ def main():
     # ---------- 浏览器驱动配置 ----------
     driver_kwargs = {
         "headless": True,
-        "headless2": True,
-        "uc": True,
         "user_data_dir": USER_DATA_DIR,
         "window_size": "1280,753",
         "disable_csp": True,
         "agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
-        "page_load_strategy": "normal",
+        "page_load_strategy": "eager",
     }
     if PROXY_SERVER:
         driver_kwargs["proxy"] = PROXY_SERVER
