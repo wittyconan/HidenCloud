@@ -251,14 +251,75 @@ def main():
         if needs_login:
             take_screenshot(driver, "02-login-page")
             
+            # 检查是否是 Cloudflare 验证页面
+            print("[INFO] 检查 Cloudflare 验证...")
+            cf_detected = False
+            for cf_attempt in range(5):
+                try:
+                    # 检查 Cloudflare 验证元素
+                    cf_turnstile = driver.is_element_present(".cf-turnstile")
+                    cf_challenge = driver.is_element_present("#challenge-running")
+                    cf_ray = driver.execute_script("return document.querySelector('input[name=\"cf-turnstile-response\"]')?.value;")
+                    
+                    if cf_turnstile:
+                        print(f"[INFO] 🔐 检测到 Cloudflare Turnstile 验证 ({cf_attempt + 1}/5)...")
+                        cf_detected = True
+                        try:
+                            driver.uc_gui_click_cf(".cf-turnstile")
+                        except:
+                            driver.click(".cf-turnstile")
+                        take_screenshot(driver, "03-cf-turnstile-clicked")
+                    elif cf_challenge:
+                        print(f"[INFO] 🔐 检测到 Cloudflare Challenge ({cf_attempt + 1}/5)...")
+                        cf_detected = True
+                    elif cf_ray and len(cf_ray) > 20:
+                        print(f"[INFO] ✅ Cloudflare Token 已生成")
+                        cf_detected = True
+                        break
+                    else:
+                        if cf_detected:
+                            print("[INFO] ⏳ 等待 Cloudflare 验证完成...")
+                        cf_detected = True
+                    
+                    time.sleep(3)
+                except Exception as e:
+                    print(f"[DEBUG] Cloudflare 检查出错: {e}")
+                    time.sleep(2)
+                
+                # 检查是否已经跳转到登录表单
+                if driver.is_element_visible("input#username"):
+                    print("[INFO] ✅ 验证完成，到达登录表单")
+                    break
+            else:
+                print("[WARN] Cloudflare 验证等待超时，继续尝试...")
+            
+            # 再次检查是否到达登录表单
+            if not driver.is_element_visible("input#username"):
+                print("[WARN] 未找到登录表单，尝试刷新...")
+                driver.refresh()
+                time.sleep(5)
+                take_screenshot(driver, "03-refreshed")
+            
             masked_email = mask_email(HIDEN_EMAIL)
             print(f"[INFO] ✍️ 填写邮箱: {masked_email}")
-            driver.type("input#username", HIDEN_EMAIL)
-            driver.type("input#password", HIDEN_PWD)
-            take_screenshot(driver, "03-credentials-filled")
+            
+            # 使用更可靠的方式填写表单
+            try:
+                driver.type("input#username", HIDEN_EMAIL)
+            except:
+                print("[WARN] 使用备用方式填写邮箱...")
+                driver.execute_script("document.querySelector('input#username').value = arguments[0];", HIDEN_EMAIL)
+            
+            try:
+                driver.type("input#password", HIDEN_PWD)
+            except:
+                print("[WARN] 使用备用方式填写密码...")
+                driver.execute_script("document.querySelector('input#password').value = arguments[0];", HIDEN_PWD)
+            
+            take_screenshot(driver, "04-credentials-filled")
 
             print("[INFO] ⏳ 等待 Turnstile 加载...")
-            time.sleep(5)
+            time.sleep(3)
 
             if driver.is_element_present(".cf-turnstile"):
                 print("[INFO] 🖱️ 尝试点击 Turnstile...")
@@ -266,18 +327,18 @@ def main():
                     driver.uc_gui_click_cf(".cf-turnstile")
                 except:
                     driver.click(".cf-turnstile")
-                take_screenshot(driver, "04-turnstile-clicked")
+                take_screenshot(driver, "05-turnstile-clicked")
 
                 if not wait_for_turnstile_token(driver, timeout=90):
                     take_screenshot(driver, "ERROR-turnstile-timeout")
                     raise Exception("Turnstile 验证超时")
-                take_screenshot(driver, "05-token-ready")
+                take_screenshot(driver, "06-token-ready")
             else:
                 print("[WARN] 未找到 Turnstile 元素，继续提交...")
 
             print("[INFO] 🚀 提交登录表单")
             driver.click("button[type='submit']")
-            take_screenshot(driver, "06-login-submitted")
+            take_screenshot(driver, "07-login-submitted")
 
             print("[INFO] ⏳ 等待登录跳转...")
             if not wait_for_url_contains(driver, "/dashboard", timeout=45):
