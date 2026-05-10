@@ -228,14 +228,29 @@ def main():
         # ---------- 1. 访问主页 ----------
         print(f"[INFO] 🌐 访问主页: {BASE_URL}/dashboard")
         driver.get(f"{BASE_URL}/dashboard")
-        time.sleep(3)
+        time.sleep(5)
         take_screenshot(driver, "01-initial")
-
+        
+        print("[DEBUG] Dashboard URL:", driver.current_url)
+        body_text = driver.execute_script("return document.body.innerText || '';")
+        print(f"[DEBUG] Dashboard 页面内容长度: {len(body_text)} 字符")
+        
         # ---------- 2. 登录判断 ----------
-        if "/auth/login" in driver.current_url or driver.is_element_visible("input#username"):
-            print("[INFO] 🔒 检测到未登录，开始登录流程")
+        needs_login = False
+        
+        if "/auth/login" in driver.current_url:
+            print("[INFO] 🔒 检测到未登录（URL），开始登录流程")
+            needs_login = True
+        elif driver.is_element_visible("input#username"):
+            print("[INFO] 🔒 检测到未登录（登录表单可见），开始登录流程")
+            needs_login = True
+        elif len(body_text) < 500:
+            print(f"[WARN] 页面内容过少({len(body_text)} 字符)，强制重新登录")
+            needs_login = True
+        
+        if needs_login:
             take_screenshot(driver, "02-login-page")
-
+            
             masked_email = mask_email(HIDEN_EMAIL)
             print(f"[INFO] ✍️ 填写邮箱: {masked_email}")
             driver.type("input#username", HIDEN_EMAIL)
