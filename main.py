@@ -384,18 +384,49 @@ def main():
 
             # 定位 Renew 按钮
             renew_btn = None
-            selectors = [
-                ("css selector", "button[onclick*='showRenewAlert']"),
-                ("xpath", "//button[.//i[contains(@class, 'bx-recycle')]]"),
-                ("xpath", "//button[contains(text(),'Renew')]"),
-            ]
-            for by, value in selectors:
-                try:
-                    renew_btn = driver.find_element(by, value)
-                    if renew_btn.is_displayed():
-                        break
-                except:
-                    continue
+            print("[DEBUG] 开始查找 Renew 按钮...")
+            
+            # 尝试所有按钮
+            try:
+                all_buttons = driver.find_elements("tag name", "button")
+                print(f"[DEBUG] 页面共有 {len(all_buttons)} 个按钮")
+                for i, btn in enumerate(all_buttons):
+                    try:
+                        btn_text = btn.text.strip()
+                        btn_class = btn.get_attribute("class") or ""
+                        btn_onclick = btn.get_attribute("onclick") or ""
+                        print(f"[DEBUG] 按钮 {i}: text='{btn_text}', class='{btn_class[:30]}', onclick='{btn_onclick[:50]}'")
+                        
+                        if any(keyword in (btn_text + btn_class + btn_onclick).lower() 
+                               for keyword in ['renew', 'recycle', 'extend', '续', '延长']):
+                            if btn.is_displayed():
+                                renew_btn = btn
+                                print(f"[INFO] ✅ 通过文本匹配找到 Renew 按钮")
+                                break
+                    except:
+                        continue
+            except Exception as e:
+                print(f"[DEBUG] 按钮搜索出错: {e}")
+            
+            if not renew_btn:
+                selectors = [
+                    ("css selector", "button[onclick*='showRenewAlert']"),
+                    ("xpath", "//button[.//i[contains(@class, 'bx-recycle')]]"),
+                    ("xpath", "//button[contains(text(),'Renew')]"),
+                    ("xpath", "//button[contains(text(),'renew')]"),
+                    ("xpath", "//button[contains(@class, 'renew')]"),
+                    ("xpath", "//button[contains(@class, 'recycle')]"),
+                    ("xpath", "//button[contains(@aria-label, 'Renew')]"),
+                    ("xpath", "//*[contains(text(),'Renew')]"),
+                ]
+                for by, value in selectors:
+                    try:
+                        renew_btn = driver.find_element(by, value)
+                        if renew_btn and renew_btn.is_displayed():
+                            print(f"[INFO] ✅ 通过选择器找到 Renew 按钮: {value}")
+                            break
+                    except:
+                        continue
 
             if not renew_btn:
                 take_screenshot(driver, "ERROR-renew-button-not-found")
