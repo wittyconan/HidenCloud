@@ -340,28 +340,56 @@ def main():
             
             take_screenshot(driver, "04-credentials-filled")
 
+            # Turnstile 处理 - 多次尝试
             print("[INFO] ⏳ 等待 Turnstile 加载...")
-            time.sleep(3)
-
-            if driver.is_element_present(".cf-turnstile"):
-                print("[INFO] 🖱️ 尝试点击 Turnstile...")
-                try:
-                    driver.uc_gui_click_cf(".cf-turnstile")
-                except:
-                    driver.click(".cf-turnstile")
-                take_screenshot(driver, "05-turnstile-clicked")
-
-                if not wait_for_turnstile_token(driver, timeout=90):
-                    print("[WARN] Turnstile 验证超时，但继续尝试提交...")
+            time.sleep(5)
+            
+            turnstile_resolved = False
+            for turnstile_attempt in range(3):
+                if driver.is_element_present(".cf-turnstile"):
+                    print(f"[INFO] 🖱️ 点击 Turnstile ({turnstile_attempt + 1}/3)...")
+                    try:
+                        driver.uc_gui_click_cf(".cf-turnstile")
+                    except:
+                        driver.click(".cf-turnstile")
+                    take_screenshot(driver, f"05-turnstile-click-{turnstile_attempt + 1}")
+                    time.sleep(5)
+                    
+                    # 检查 token 是否生成
+                    token = driver.execute_script(
+                        'return document.querySelector("[name=cf-turnstile-response]")?.value'
+                    )
+                    if token and len(token) > 20:
+                        print("[INFO] ✅ Turnstile token 已生成")
+                        turnstile_resolved = True
+                        take_screenshot(driver, "06-token-ready")
+                        break
                 else:
-                    take_screenshot(driver, "06-token-ready")
-            else:
-                print("[WARN] 未找到 Turnstile 元素，继续提交...")
-
+                    # Turnstile 已经消失，说明验证通过
+                    print("[INFO] ✅ Turnstile 已解决")
+                    turnstile_resolved = True
+                    break
+            
+            if not turnstile_resolved:
+                print("[WARN] Turnstile 可能未完成，尝试继续...")
+            
             print("[INFO] 🚀 提交登录表单")
             driver.click("button[type='submit']")
             take_screenshot(driver, "07-login-submitted")
-
+            
+            # 提交后再次检查 Turnstile
+            time.sleep(3)
+            if driver.is_element_present(".cf-turnstile"):
+                print("[INFO] 🔄 提交后仍有 Turnstile，继续等待...")
+                for post_turnstile in range(5):
+                    token = driver.execute_script(
+                        'return document.querySelector("[name=cf-turnstile-response]")?.value'
+                    )
+                    if token and len(token) > 20:
+                        print(f"[INFO] ✅ 提交后 Token 已生成 ({post_turnstile + 1}/5)")
+                        break
+                    time.sleep(3)
+            
             print("[INFO] ⏳ 等待登录跳转...")
             if not wait_for_url_contains(driver, "/dashboard", timeout=45):
                 error_text = check_login_error(driver)
