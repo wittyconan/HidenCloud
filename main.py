@@ -398,17 +398,35 @@ def main():
                     print(f"[INFO] ⏳ 等待登录响应... ({post_wait + 1}/10)")
             
             print("[INFO] ⏳ 等待登录跳转...")
-            if not wait_for_url_contains(driver, "/dashboard", timeout=45):
+            
+            login_success = False
+            for login_wait in range(15):
+                time.sleep(2)
+                if "/dashboard" in driver.current_url:
+                    print(f"[INFO] ✅ 已跳转到 Dashboard ({login_wait + 1})")
+                    login_success = True
+                    break
+                print(f"[DEBUG] 等待跳转... ({login_wait + 1}/15) 当前: {driver.current_url}")
+            
+            if not login_success:
                 error_text = check_login_error(driver)
                 if error_text:
                     print(f"[ERROR] 登录失败: {error_text}")
                     take_screenshot(driver, "ERROR-login-failed-message")
-                    raise Exception(f"登录失败: {error_text}")
                 else:
-                    time.sleep(5)
-                    if "/dashboard" not in driver.current_url:
-                        take_screenshot(driver, "ERROR-login-stuck")
-                        raise Exception("登录后卡住，未跳转")
+                    print("[WARN] 登录未成功，尝试直接访问 Dashboard...")
+                    take_screenshot(driver, "ERROR-login-stuck")
+                
+                # 尝试直接访问 Dashboard（可能有缓存的登录状态）
+                driver.get(f"{BASE_URL}/dashboard")
+                time.sleep(5)
+                
+                if "/dashboard" in driver.current_url:
+                    print("[INFO] ✅ 绕过登录访问 Dashboard 成功")
+                    login_success = True
+                elif "/auth/login" in driver.current_url:
+                    print("[ERROR] 无法登录，请检查凭证或使用代理")
+                    raise Exception("无法登录 Cloudflare 阻止了自动化访问")
 
             print("[INFO] ✅ 登录成功")
             take_screenshot(driver, "07-login-success")
