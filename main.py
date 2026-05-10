@@ -430,6 +430,33 @@ def main():
 
             print("[INFO] ✅ 登录成功")
             take_screenshot(driver, "07-login-success")
+            
+            # ---------- 处理第二层 Cloudflare 安全验证 ----------
+            print("[INFO] 🛡️ 检查第二层安全验证...")
+            for security_wait in range(20):
+                time.sleep(3)
+                current_url = driver.current_url
+                
+                # 检查是否遇到安全验证页面
+                try:
+                    body_text = driver.execute_script("return document.body.innerText || '';")
+                    
+                    if "Verifying" in body_text or "Analyzing connection" in body_text or "Protection Enabled" in body_text:
+                        print(f"[INFO] ⏳ Cloudflare 安全验证中 ({security_wait + 1}/20)...")
+                        continue
+                        
+                    # 检查是否已到达 Dashboard 且内容正常
+                    if "/dashboard" in current_url and len(body_text) > 500:
+                        print(f"[INFO] ✅ 第二层验证完成，Dashboard 内容长度: {len(body_text)} 字符")
+                        break
+                        
+                except Exception as e:
+                    print(f"[DEBUG] 检查安全验证时出错: {e}")
+                
+                if security_wait < 19:
+                    print(f"[DEBUG] 等待安全验证... ({security_wait + 1}/20)")
+            
+            take_screenshot(driver, "07b-security-check")
         else:
             print("[INFO] ✅ 已登录，跳过登录流程")
             take_screenshot(driver, "02-already-logged-in")
