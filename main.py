@@ -171,8 +171,6 @@ def main():
         print(f"[INFO] 🌐 使用代理: {PROXY_SERVER}")
 
     driver = Driver(**driver_kwargs)
-    driver.set_page_load_timeout(60)
-    driver.set_script_timeout(60)
 
     try:
         driver.get("about:blank")
@@ -180,6 +178,9 @@ def main():
         print(f"[WARN] 访问 about:blank 失败（可忽略）: {e}")
 
     time.sleep(2)
+    
+    driver.set_page_load_timeout(60)
+    driver.set_script_timeout(60)
 
     final_screenshot = None
     result_status = "❌ 续订失败"
@@ -510,11 +511,24 @@ def main():
 
     except Exception as e:
         print(f"[ERROR] ❌ 脚本执行失败: {e}")
-        take_screenshot(driver, "CRITICAL-ERROR")
+        try:
+            take_screenshot(driver, "CRITICAL-ERROR")
+        except:
+            pass
         send_tg_notification(f"❌ HidenCloud 续期失败\n错误: {str(e)[:100]}")
         raise
     finally:
-        driver.quit()
+        try:
+            driver.quit()
+        except Exception as quit_err:
+            print(f"[WARN] 浏览器退出时出错（可忽略）: {quit_err}")
+            try:
+                import os
+                import subprocess
+                subprocess.run(['pkill', '-f', 'chrome'], stderr=subprocess.DEVNULL)
+                subprocess.run(['pkill', '-f', 'chromedriver'], stderr=subprocess.DEVNULL)
+            except:
+                pass
 
 
 if __name__ == "__main__":
