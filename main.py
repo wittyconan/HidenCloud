@@ -352,9 +352,9 @@ def main():
                 take_screenshot(driver, "05-turnstile-clicked")
 
                 if not wait_for_turnstile_token(driver, timeout=90):
-                    take_screenshot(driver, "ERROR-turnstile-timeout")
-                    raise Exception("Turnstile 验证超时")
-                take_screenshot(driver, "06-token-ready")
+                    print("[WARN] Turnstile 验证超时，但继续尝试提交...")
+                else:
+                    take_screenshot(driver, "06-token-ready")
             else:
                 print("[WARN] 未找到 Turnstile 元素，继续提交...")
 
