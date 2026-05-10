@@ -195,10 +195,12 @@ def main():
     driver_kwargs = {
         "headless": True,
         "headless2": True,
+        "uc": True,
         "user_data_dir": USER_DATA_DIR,
         "window_size": "1280,753",
         "disable_csp": True,
         "agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
+        "page_load_strategy": "normal",
     }
     if PROXY_SERVER:
         driver_kwargs["proxy"] = PROXY_SERVER
@@ -251,54 +253,60 @@ def main():
         if needs_login:
             take_screenshot(driver, "02-login-page")
             
-            # 检查是否是 Cloudflare 验证页面
+            # Cloudflare 验证处理 - 多次重试
             print("[INFO] 检查 Cloudflare 验证...")
-            cf_detected = False
-            for cf_attempt in range(5):
-                try:
-                    # 检查 Cloudflare 验证元素
-                    cf_turnstile = driver.is_element_present(".cf-turnstile")
-                    cf_challenge = driver.is_element_present("#challenge-running")
-                    cf_ray = driver.execute_script("return document.querySelector('input[name=\"cf-turnstile-response\"]')?.value;")
-                    
-                    if cf_turnstile:
-                        print(f"[INFO] 🔐 检测到 Cloudflare Turnstile 验证 ({cf_attempt + 1}/5)...")
-                        cf_detected = True
-                        try:
-                            driver.uc_gui_click_cf(".cf-turnstile")
-                        except:
-                            driver.click(".cf-turnstile")
-                        take_screenshot(driver, "03-cf-turnstile-clicked")
-                    elif cf_challenge:
-                        print(f"[INFO] 🔐 检测到 Cloudflare Challenge ({cf_attempt + 1}/5)...")
-                        cf_detected = True
-                    elif cf_ray and len(cf_ray) > 20:
-                        print(f"[INFO] ✅ Cloudflare Token 已生成")
-                        cf_detected = True
-                        break
-                    else:
-                        if cf_detected:
-                            print("[INFO] ⏳ 等待 Cloudflare 验证完成...")
-                        cf_detected = True
-                    
-                    time.sleep(3)
-                except Exception as e:
-                    print(f"[DEBUG] Cloudflare 检查出错: {e}")
-                    time.sleep(2)
-                
-                # 检查是否已经跳转到登录表单
-                if driver.is_element_visible("input#username"):
-                    print("[INFO] ✅ 验证完成，到达登录表单")
-                    break
-            else:
-                print("[WARN] Cloudflare 验证等待超时，继续尝试...")
+            login_form_found = False
             
-            # 再次检查是否到达登录表单
-            if not driver.is_element_visible("input#username"):
-                print("[WARN] 未找到登录表单，尝试刷新...")
+            for main_attempt in range(3):
+                print(f"[INFO] ===== 主验证尝试 {main_attempt + 1}/3 =====")
+                
+                # 等待页面内容变化
+                for cf_attempt in range(10):
+                    try:
+                        cf_turnstile = driver.is_element_present(".cf-turnstile")
+                        cf_widget = driver.is_element_present(".cf-widget")
+                        login_form = driver.is_element_visible("input#username")
+                        
+                        if login_form:
+                            print("[INFO] ✅ 登录表单已出现")
+                            login_form_found = True
+                            break
+                        
+                        if cf_turnstile:
+                            print(f"[INFO] 🔐 检测到 Turnstile ({cf_attempt + 1}/10)...")
+                            try:
+                                driver.uc_gui_click_cf(".cf-turnstile")
+                            except:
+                                driver.execute_script("""
+                                    var turnstile = document.querySelector('.cf-turnstile iframe');
+                                    if (turnstile) turnstile.click();
+                                """)
+                            time.sleep(3)
+                        elif cf_widget:
+                            print(f"[INFO] 🔐 检测到 CF Widget ({cf_attempt + 1}/10)...")
+                            time.sleep(3)
+                        else:
+                            print(f"[INFO] ⏳ 等待验证完成... ({cf_attempt + 1}/10)")
+                            time.sleep(2)
+                            
+                    except Exception as e:
+                        print(f"[DEBUG] 验证检查异常: {e}")
+                        time.sleep(2)
+                
+                if login_form_found:
+                    break
+                    
+                # 如果没找到表单，尝试刷新
+                print(f"[WARN] 主尝试 {main_attempt + 1} 失败，刷新页面...")
                 driver.refresh()
-                time.sleep(5)
-                take_screenshot(driver, "03-refreshed")
+                time.sleep(8)
+                take_screenshot(driver, f"02-retry-{main_attempt + 1}")
+            
+            # 最终检查
+            if not driver.is_element_visible("input#username"):
+                print("[ERROR] 无法到达登录表单，请检查网络或手动验证")
+                take_screenshot(driver, "ERROR-no-login-form")
+                raise Exception("无法到达登录表单，可能是 Cloudflare 阻止了自动化访问")
             
             masked_email = mask_email(HIDEN_EMAIL)
             print(f"[INFO] ✍️ 填写邮箱: {masked_email}")
