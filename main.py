@@ -195,7 +195,6 @@ def main():
     driver_kwargs = {
         "headless": True,
         "headless2": True,
-        "uc": True,
         "user_data_dir": USER_DATA_DIR,
         "window_size": "1280,753",
         "disable_csp": True,
