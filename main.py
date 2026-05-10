@@ -451,20 +451,32 @@ def main():
         take_screenshot(driver, "08-dashboard")
         
         print("[INFO] ⏳ 等待页面加载完成...")
-        time.sleep(5)
         
-        # 等待页面内容加载
-        for attempt in range(3):
+        # 等待页面完全加载
+        for attempt in range(5):
+            time.sleep(3)
             try:
                 body_text = driver.execute_script("return document.body.innerText || '';")
-                if len(body_text) > 100:
-                    print(f"[DEBUG] 页面内容长度: {len(body_text)} 字符")
+                print(f"[DEBUG] 页面内容长度: {len(body_text)} 字符 ({attempt + 1}/5)")
+                if len(body_text) > 500:
                     break
-                print(f"[WARN] 页面内容过短，尝试 {attempt + 1}/3...")
-                time.sleep(3)
             except Exception as e:
                 print(f"[WARN] 页面等待失败: {e}")
-                time.sleep(2)
+        
+        # 如果页面内容仍然很短，尝试刷新
+        body_text = driver.execute_script("return document.body.innerText || '';")
+        if len(body_text) < 500:
+            print(f"[WARN] 页面内容过短，尝试刷新...")
+            driver.refresh()
+            time.sleep(8)
+            
+            # 再次等待
+            for attempt in range(3):
+                time.sleep(3)
+                body_text = driver.execute_script("return document.body.innerText || '';")
+                print(f"[DEBUG] 刷新后页面内容长度: {len(body_text)} 字符 ({attempt + 1}/3)")
+                if len(body_text) > 500:
+                    break
         
         driver.execute_script("window.scrollTo(0, 0);")
         time.sleep(1)
