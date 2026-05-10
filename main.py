@@ -171,8 +171,6 @@ def main():
         print(f"[INFO] 🌐 使用代理: {PROXY_SERVER}")
 
     driver = Driver(**driver_kwargs)
-    driver.set_page_load_timeout(60)
-    driver.set_script_timeout(60)
 
     try:
         driver.get("about:blank")
@@ -180,6 +178,9 @@ def main():
         print(f"[WARN] 访问 about:blank 失败（可忽略）: {e}")
 
     time.sleep(2)
+    
+    driver.set_page_load_timeout(60)
+    driver.set_script_timeout(60)
 
     final_screenshot = None
     result_status = "❌ 续订失败"
@@ -253,16 +254,76 @@ def main():
         take_screenshot(driver, "08-dashboard")
         time.sleep(3)
 
-        try:
-            element = driver.find_element("xpath", "//span[contains(text(),'Free Server #')]")
-            text = element.text.strip()
-            print("[INFO] 找到服务器文本: Free Server #***")
-            match = re.search(r'Free Server #(\d+)', text)
-            if match:
-                sid = match.group(1)
-                print("[INFO] ✅ 提取到服务器 ID: ***")
-        except Exception as e:
-            print(f"[ERROR] 页面元素定位失败: {e}")
+        # 滚动到页面顶部，确保服务器列表可见
+        driver.execute_script("window.scrollTo(0, 0);")
+        time.sleep(1)
+
+        # 尝试多种选择器定位服务器元素
+        sid = None
+        server_text = None
+        
+        selectors_to_try = [
+            ("xpath", "//span[contains(text(),'Free Server #')]"),
+            ("xpath", "//div[contains(text(),'Free Server #')]"),
+            ("xpath", "//span[contains(text(),'Server #')]"),
+            ("xpath", "//div[contains(text(),'Server #')]"),
+            ("xpath", "//*[contains(text(),'Free Server')]"),
+            ("xpath", "//a[contains(@href, '/service/') and contains(text(), 'Server')]"),
+        ]
+        
+        for by, selector in selectors_to_try:
+            try:
+                print(f"[INFO] 尝试选择器: {selector}")
+                element = driver.find_element(by, selector)
+                if element and element.is_displayed():
+                    server_text = element.text.strip()
+                    print(f"[INFO] 找到元素文本: {server_text[:50]}...")
+                    match = re.search(r'Free Server #(\d+)', server_text)
+                    if not match:
+                        match = re.search(r'Server #(\d+)', server_text)
+                    if match:
+                        sid = match.group(1)
+                        print(f"[INFO] ✅ 提取到服务器 ID: {sid}")
+                        break
+            except Exception as e:
+                print(f"[DEBUG] 选择器失败: {str(e)[:80]}")
+                continue
+        
+        # 如果常规选择器都失败，尝试从 URL 或服务链接中提取
+        if not sid:
+            try:
+                print("[INFO] 尝试从服务链接中提取服务器 ID...")
+                links = driver.find_elements("xpath", "//a[contains(@href, '/service/')]")
+                for link in links:
+                    href = link.get_attribute("href") or ""
+                    match = re.search(r'/service/(\d+)', href)
+                    if match:
+                        sid = match.group(1)
+                        print(f"[INFO] ✅ 从链接提取到服务器 ID: {sid}")
+                        break
+            except Exception as e:
+                print(f"[DEBUG] 链接提取失败: {e}")
+
+        # 滚动查看是否有隐藏的服务器
+        if not sid:
+            print("[INFO] 滚动页面查找服务器...")
+            for scroll_pos in [500, 1000, 1500, 2000]:
+                driver.execute_script(f"window.scrollTo(0, {scroll_pos});")
+                time.sleep(1)
+                for by, selector in selectors_to_try[:2]:
+                    try:
+                        element = driver.find_element(by, selector)
+                        if element and element.is_displayed():
+                            server_text = element.text.strip()
+                            match = re.search(r'Free Server #(\d+)', server_text)
+                            if match:
+                                sid = match.group(1)
+                                print(f"[INFO] ✅ 滚动后提取到服务器 ID: {sid}")
+                                break
+                    except:
+                        continue
+                if sid:
+                    break
 
         if not sid:
             take_screenshot(driver, "ERROR-no-server-id")
@@ -450,11 +511,24 @@ def main():
 
     except Exception as e:
         print(f"[ERROR] ❌ 脚本执行失败: {e}")
-        take_screenshot(driver, "CRITICAL-ERROR")
+        try:
+            take_screenshot(driver, "CRITICAL-ERROR")
+        except:
+            pass
         send_tg_notification(f"❌ HidenCloud 续期失败\n错误: {str(e)[:100]}")
         raise
     finally:
-        driver.quit()
+        try:
+            driver.quit()
+        except Exception as quit_err:
+            print(f"[WARN] 浏览器退出时出错（可忽略）: {quit_err}")
+            try:
+                import os
+                import subprocess
+                subprocess.run(['pkill', '-f', 'chrome'], stderr=subprocess.DEVNULL)
+                subprocess.run(['pkill', '-f', 'chromedriver'], stderr=subprocess.DEVNULL)
+            except:
+                pass
 
 
 if __name__ == "__main__":
