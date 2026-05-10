@@ -433,7 +433,9 @@ def main():
             
             # ---------- 处理第二层 Cloudflare 安全验证 ----------
             print("[INFO] 🛡️ 检查第二层安全验证...")
-            for security_wait in range(20):
+            security_success = False
+            
+            for security_wait in range(40):
                 time.sleep(3)
                 current_url = driver.current_url
                 
@@ -442,19 +444,50 @@ def main():
                     body_text = driver.execute_script("return document.body.innerText || '';")
                     
                     if "Verifying" in body_text or "Analyzing connection" in body_text or "Protection Enabled" in body_text:
-                        print(f"[INFO] ⏳ Cloudflare 安全验证中 ({security_wait + 1}/20)...")
+                        print(f"[INFO] ⏳ Cloudflare 安全验证中 ({security_wait + 1}/40)...")
+                        
+                        # 模拟用户行为：随机滚动和鼠标移动
+                        if security_wait % 5 == 0:
+                            driver.execute_script("window.scrollBy(0, Math.random() * 100);")
+                            driver.execute_script("""
+                                var event = new MouseEvent('mousemove', {
+                                    clientX: Math.random() * window.innerWidth,
+                                    clientY: Math.random() * window.innerHeight,
+                                    bubbles: true
+                                });
+                                document.dispatchEvent(event);
+                            """)
                         continue
                         
                     # 检查是否已到达 Dashboard 且内容正常
                     if "/dashboard" in current_url and len(body_text) > 500:
                         print(f"[INFO] ✅ 第二层验证完成，Dashboard 内容长度: {len(body_text)} 字符")
+                        security_success = True
                         break
                         
                 except Exception as e:
                     print(f"[DEBUG] 检查安全验证时出错: {e}")
                 
-                if security_wait < 19:
-                    print(f"[DEBUG] 等待安全验证... ({security_wait + 1}/20)")
+                if security_wait < 39:
+                    print(f"[DEBUG] 等待安全验证... ({security_wait + 1}/40)")
+            
+            if not security_success:
+                print("[WARN] ⚠️ 第二层验证超时，尝试刷新页面...")
+                driver.refresh()
+                time.sleep(10)
+                
+                # 再次等待验证完成
+                for retry_wait in range(20):
+                    time.sleep(3)
+                    try:
+                        body_text = driver.execute_script("return document.body.innerText || '';")
+                        if "/dashboard" in driver.current_url and len(body_text) > 500:
+                            print(f"[INFO] ✅ 刷新后验证完成，内容长度: {len(body_text)} 字符")
+                            security_success = True
+                            break
+                        print(f"[DEBUG] 刷新后等待... ({retry_wait + 1}/20)")
+                    except:
+                        continue
             
             take_screenshot(driver, "07b-security-check")
         else:
